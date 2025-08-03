@@ -15,13 +15,6 @@ export async function validateTransaction(
     if (!transaction.feePayer?.equals(feePayer.publicKey)) throw new Error('invalid fee payer');
     if (!transaction.recentBlockhash) throw new Error('missing recent blockhash');
 
-    // TODO: handle nonce accounts?
-
-    // Check Octane's RPC node for the blockhash to make sure it's synced and the fee is reasonable
-    const feeCalculator = await connection.getFeeCalculatorForBlockhash(transaction.recentBlockhash);
-    if (!feeCalculator.value) throw new Error('blockhash not found');
-    if (feeCalculator.value.lamportsPerSignature > lamportsPerSignature) throw new Error('fee too high');
-
     // Check the signatures for length, the primary signature, and secondary signature(s)
     if (!transaction.signatures.length) throw new Error('no signatures');
     if (transaction.signatures.length > maxSignatures) throw new Error('too many signatures');
