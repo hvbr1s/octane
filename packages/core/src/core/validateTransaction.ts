@@ -35,18 +35,18 @@ export async function validateTransaction(
         // TODO: handle nonce accounts?
 
         // Check Octane's RPC node for the blockhash to make sure it's synced and the fee is reasonable
-        logger.debug('VALIDATE_TRANSACTION', 'Fetching fee calculator for blockhash', context);
-        const feeCalculator = await connection.getFeeCalculatorForBlockhash(transaction.recentBlockhash);
-        if (!feeCalculator.value) {
-            logger.error('VALIDATE_TRANSACTION', 'Blockhash not found on network', context, new Error('blockhash not found'));
-            throw new Error('blockhash not found');
-        }
-        if (feeCalculator.value.lamportsPerSignature > lamportsPerSignature) {
-            logger.error('VALIDATE_TRANSACTION', `Fee too high: ${feeCalculator.value.lamportsPerSignature} > ${lamportsPerSignature}`, context, new Error('fee too high'));
-            throw new Error('fee too high');
-        }
+        // logger.debug('VALIDATE_TRANSACTION', 'Fetching fee calculator for blockhash', context);
+        // const feeCalculator = await connection.getFeeCalculatorForBlockhash(transaction.recentBlockhash);
+        // if (!feeCalculator.value) {
+        //     logger.error('VALIDATE_TRANSACTION', 'Blockhash not found on network', context, new Error('blockhash not found'));
+        //     throw new Error('blockhash not found');
+        // }
+        // if (feeCalculator.value.lamportsPerSignature > lamportsPerSignature) {
+        //     logger.error('VALIDATE_TRANSACTION', `Fee too high: ${feeCalculator.value.lamportsPerSignature} > ${lamportsPerSignature}`, context, new Error('fee too high'));
+        //     throw new Error('fee too high');
+        // }
 
-        logger.debug('VALIDATE_TRANSACTION', `✅ Fee validation passed: ${feeCalculator.value.lamportsPerSignature} lamports per signature`, context);
+        // logger.debug('VALIDATE_TRANSACTION', `✅ Fee validation passed: ${feeCalculator.value.lamportsPerSignature} lamports per signature`, context);
 
         // Check the signatures for length, the primary signature, and secondary signature(s)
         logger.debug('VALIDATE_TRANSACTION', `Validating signatures (count: ${transaction.signatures.length}, max: ${maxSignatures})`, context);
