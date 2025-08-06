@@ -6,6 +6,8 @@ import {
     validateAccountInitializationInstructions,
     validateTransaction,
     validateTransfer,
+    logger,
+    TransactionLogger,
 } from '../core';
 import { Cache } from 'cache-manager';
 import base58 from 'bs58';
@@ -35,34 +37,55 @@ export async function createAccountIfTokenFeePaid(
     cache: Cache,
     sameSourceTimeout = 5000
 ) {
-    // Prevent simple duplicate transactions using a hash of the message
-    let key = `transaction/${base58.encode(sha256(transaction.serializeMessage()))}`;
-    if (await cache.get(key)) throw new Error('duplicate transaction');
-    await cache.set(key, true);
+    const initialContext = TransactionLogger.extractTransactionContext(transaction, {
+        feePayer: feePayer.publicKey.toBase58()
+    });
+    
+    const journey = logger.createJourneyTracker(initialContext);
+    
+    try {
+        journey.stage('DUPLICATE_CHECK', 'Checking for duplicate account creation transactions');
+        // Prevent simple duplicate transactions using a hash of the message
+        let key = `transaction/${base58.encode(sha256(transaction.serializeMessage()))}`;
+        if (await cache.get(key)) {
+            throw new Error('duplicate transaction');
+        }
+        await cache.set(key, true);
 
-    // Check that the transaction is basically valid, sign it, and serialize it, verifying the signatures
-    const { signature, rawTransaction } = await validateTransaction(
-        connection,
-        transaction,
-        feePayer,
-        maxSignatures,
-        lamportsPerSignature
-    );
+        journey.stage('TRANSACTION_VALIDATION', 'Validating and signing transaction');
+        // Check that the transaction is basically valid, sign it, and serialize it, verifying the signatures
+        const { signature, rawTransaction } = await validateTransaction(
+            connection,
+            transaction,
+            feePayer,
+            maxSignatures,
+            lamportsPerSignature
+        );
 
-    // Check that transaction only contains transfer and a valid new account
-    await validateAccountInitializationInstructions(connection, transaction, feePayer, cache);
+        journey.stage('ACCOUNT_INIT_VALIDATION', 'Validating account initialization instructions');
+        // Check that transaction only contains transfer and a valid new account
+        await validateAccountInitializationInstructions(connection, transaction, feePayer, cache);
 
-    // Check that the transaction contains a valid transfer to Octane's token account
-    const transfer = await validateTransfer(connection, transaction, allowedTokens);
+        journey.stage('TRANSFER_VALIDATION', 'Validating token transfer for account creation');
+        // Check that the transaction contains a valid transfer to Octane's token account
+        const transfer = await validateTransfer(connection, transaction, allowedTokens);
 
-    key = `createAccount/lastSignature/${transfer.keys.source.pubkey.toBase58()}`;
-    const lastSignature: number | undefined = await cache.get(key);
-    if (lastSignature && Date.now() - lastSignature < sameSourceTimeout) {
-        throw new Error('duplicate transfer');
+        journey.stage('SOURCE_LOCKOUT_CHECK', 'Checking source account lockout for account creation');
+        key = `createAccount/lastSignature/${transfer.keys.source.pubkey.toBase58()}`;
+        const lastSignature: number | undefined = await cache.get(key);
+        if (lastSignature && Date.now() - lastSignature < sameSourceTimeout) {
+            throw new Error('duplicate transfer');
+        }
+        await cache.set(key, Date.now());
+
+        journey.stage('TRANSACTION_SIMULATION', 'Simulating account creation transaction');
+        await simulateRawTransaction(connection, rawTransaction);
+
+        journey.complete({ signature });
+        return { signature: signature };
+        
+    } catch (error) {
+        journey.fail(error as Error);
+        throw error;
     }
-    await cache.set(key, Date.now());
-
-    await simulateRawTransaction(connection, rawTransaction);
-
-    return { signature: signature };
 }

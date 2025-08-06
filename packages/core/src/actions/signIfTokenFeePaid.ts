@@ -8,6 +8,8 @@ import {
     validateTransfer,
     TokenFee,
     validateInstructions,
+    logger,
+    TransactionLogger,
 } from '../core';
 
 /**
@@ -34,40 +36,61 @@ export async function signWithTokenFee(
     cache: Cache,
     sameSourceTimeout = 5000
 ): Promise<{ signature: string }> {
-    // Prevent simple duplicate transactions using a hash of the message
-    let key = `transaction/${base58.encode(sha256(transaction.serializeMessage()))}`;
-    if (await cache.get(key)) throw new Error('duplicate transaction');
-    await cache.set(key, true);
+    const initialContext = TransactionLogger.extractTransactionContext(transaction, {
+        feePayer: feePayer.publicKey.toBase58()
+    });
+    
+    const journey = logger.createJourneyTracker(initialContext);
+    
+    try {
+        journey.stage('DUPLICATE_CHECK', 'Checking for duplicate transactions');
+        // Prevent simple duplicate transactions using a hash of the message
+        let key = `transaction/${base58.encode(sha256(transaction.serializeMessage()))}`;
+        if (await cache.get(key)) {
+            throw new Error('duplicate transaction');
+        }
+        await cache.set(key, true);
 
-    // Check that the transaction is basically valid, sign it, and serialize it, verifying the signatures
-    const { signature, rawTransaction } = await validateTransaction(
-        connection,
-        transaction,
-        feePayer,
-        maxSignatures,
-        lamportsPerSignature
-    );
+        journey.stage('TRANSACTION_VALIDATION', 'Validating and signing transaction');
+        // Check that the transaction is basically valid, sign it, and serialize it, verifying the signatures
+        const { signature, rawTransaction } = await validateTransaction(
+            connection,
+            transaction,
+            feePayer,
+            maxSignatures,
+            lamportsPerSignature
+        );
 
-    await validateInstructions(transaction, feePayer);
+        journey.stage('INSTRUCTION_SECURITY', 'Validating instruction security');
+        await validateInstructions(transaction, feePayer);
 
-    // Check that the transaction contains a valid transfer to Octane's token account
-    const transfer = await validateTransfer(connection, transaction, allowedTokens);
+        journey.stage('TRANSFER_VALIDATION', 'Validating token transfer');
+        // Check that the transaction contains a valid transfer to Octane's token account
+        const transfer = await validateTransfer(connection, transaction, allowedTokens);
 
-    /*
-       An attacker could make multiple signing requests before the transaction is confirmed. If the source token account
-       has the minimum fee balance, validation and simulation of all these requests may succeed. All but the first
-       confirmed transaction will fail because the account will be empty afterward. To prevent this race condition,
-       simulation abuse, or similar attacks, we implement a simple lockout for the source token account
-       for a few seconds after the transaction.
-     */
-    key = `transfer/lastSignature/${transfer.keys.source.pubkey.toBase58()}`;
-    const lastSignature: number | undefined = await cache.get(key);
-    if (lastSignature && Date.now() - lastSignature < sameSourceTimeout) {
-        throw new Error('duplicate transfer');
+        journey.stage('SOURCE_LOCKOUT_CHECK', 'Checking source account lockout');
+        /*
+           An attacker could make multiple signing requests before the transaction is confirmed. If the source token account
+           has the minimum fee balance, validation and simulation of all these requests may succeed. All but the first
+           confirmed transaction will fail because the account will be empty afterward. To prevent this race condition,
+           simulation abuse, or similar attacks, we implement a simple lockout for the source token account
+           for a few seconds after the transaction.
+         */
+        key = `transfer/lastSignature/${transfer.keys.source.pubkey.toBase58()}`;
+        const lastSignature: number | undefined = await cache.get(key);
+        if (lastSignature && Date.now() - lastSignature < sameSourceTimeout) {
+            throw new Error('duplicate transfer');
+        }
+        await cache.set(key, Date.now());
+
+        journey.stage('TRANSACTION_SIMULATION', 'Simulating transaction');
+        await simulateRawTransaction(connection, rawTransaction);
+
+        journey.complete({ signature });
+        return { signature: signature };
+        
+    } catch (error) {
+        journey.fail(error as Error);
+        throw error;
     }
-    await cache.set(key, Date.now());
-
-    await simulateRawTransaction(connection, rawTransaction);
-
-    return { signature: signature };
 }

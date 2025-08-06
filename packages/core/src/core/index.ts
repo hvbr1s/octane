@@ -1,4 +1,5 @@
 export * from './clusters';
+export * from './logger';
 export * from './messageToken';
 export * from './sha256';
 export * from './simulateRawTransaction';
