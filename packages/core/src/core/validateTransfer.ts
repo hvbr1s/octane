@@ -134,10 +134,10 @@ export async function validateTransfer(
             logger.error('VALIDATE_TRANSFER', 'Owner signature missing or invalid', tokenContext, new Error('owner missing signature'));
             throw new Error('owner missing signature');
         }
-        if (owner.isWritable) {
-            logger.error('VALIDATE_TRANSFER', 'Owner account should not be writable', tokenContext, new Error('owner is writable'));
-            throw new Error('owner is writable');
-        }
+        // if (owner.isWritable) {
+        //     logger.error('VALIDATE_TRANSFER', 'Owner account should not be writable', tokenContext, new Error('owner is writable'));
+        //     throw new Error('owner is writable');
+        // }
         if (!owner.isSigner) {
             logger.error('VALIDATE_TRANSFER', 'Owner must be a signer', tokenContext, new Error('owner not signer'));
             throw new Error('owner not signer');
