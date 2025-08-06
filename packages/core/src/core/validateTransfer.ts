@@ -5,6 +5,7 @@ import {
     getAccount,
     isTransferCheckedInstruction,
     isTransferInstruction,
+    TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 import { Connection, Transaction } from '@solana/web3.js';
 import { TokenFee } from './tokenFee';
@@ -21,16 +22,24 @@ export async function validateTransfer(
     
     try {
         // Get the first instruction of the transaction
-        logger.debug('VALIDATE_TRANSFER', 'Extracting first instruction', context);
-        const [first] = transaction.instructions;
-        if (!first) {
-            logger.error('VALIDATE_TRANSFER', 'No instructions found in transaction', context, new Error('missing instructions'));
-            throw new Error('missing instructions');
+        logger.debug('VALIDATE_TRANSFER', 'Finding first Token Program instruction', context);
+        
+        const tokenInstruction = transaction.instructions.find(
+            ix => ix.programId.equals(TOKEN_PROGRAM_ID)
+        );
+        
+        if (!tokenInstruction) {
+            logger.error('VALIDATE_TRANSFER', 'No Token Program instructions found in transaction', context, new Error('missing token instruction'));
+            throw new Error('missing token instruction');
         }
+        
+        // Log which instruction index we're using
+        const instructionIndex = transaction.instructions.indexOf(tokenInstruction);
+        logger.debug('VALIDATE_TRANSFER', `Found Token Program instruction at index ${instructionIndex}`, context);
 
-        // Decode the first instruction and make sure it's a valid SPL Token `Transfer` or `TransferChecked` instruction
+        // Decode the Token Program instruction
         logger.debug('VALIDATE_TRANSFER', 'Decoding SPL token instruction', context);
-        const instruction = decodeInstruction(first);
+        const instruction = decodeInstruction(tokenInstruction);
         if (!(isTransferInstruction(instruction) || isTransferCheckedInstruction(instruction))) {
             logger.error('VALIDATE_TRANSFER', 'First instruction is not a valid SPL transfer', context, new Error('invalid instruction'));
             throw new Error('invalid instruction');
