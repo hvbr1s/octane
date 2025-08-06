@@ -100,10 +100,10 @@ export async function validateTransfer(
 
         // Check that the instruction has a valid source account
         logger.debug('VALIDATE_TRANSFER', 'Validating source account permissions', tokenContext);
-        if (!source.isWritable) {
-            logger.error('VALIDATE_TRANSFER', 'Source account is not writable', tokenContext, new Error('source not writable'));
-            throw new Error('source not writable');
-        }
+        // if (!source.isWritable) {
+        //     logger.error('VALIDATE_TRANSFER', 'Source account is not writable', tokenContext, new Error('source not writable'));
+        //     throw new Error('source not writable');
+        // }
         if (source.isSigner) {
             logger.error('VALIDATE_TRANSFER', 'Source account should not be a signer', tokenContext, new Error('source is signer'));
             throw new Error('source is signer');
