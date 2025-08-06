@@ -15,6 +15,7 @@ export async function validateTransfer(
     transaction: Transaction,
     allowedTokens: TokenFee[]
 ): Promise<DecodedTransferInstruction | DecodedTransferCheckedInstruction> {
+    console.log("Validating transfer: ", transaction)
     // Get the first instruction of the transaction
     const [first] = transaction.instructions;
     if (!first) throw new Error('missing instructions');

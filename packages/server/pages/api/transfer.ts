@@ -18,6 +18,7 @@ export default async function (request: NextApiRequest, response: NextApiRespons
     await cors(request, response);
     await rateLimit(request, response);
 
+    console.log("Received base58 wired-encoded transaction: ", request)
     // Deserialize a base58 wire-encoded transaction from the request
     const serialized = request.body?.transaction;
     if (typeof serialized !== 'string') {
